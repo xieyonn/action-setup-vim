@@ -1,8 +1,7 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.exec = exec;
-exports.unzip = unzip;
-const exec_1 = require("@actions/exec");
+import process from 'node:process';
+import { exec as origExec } from '@actions/exec';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import * as core from '@actions/core';
 // Avoid leaking $INPUT_* variables to subprocess
 //   ref: https://github.com/actions/toolkit/issues/309
 function getEnv(base) {
@@ -17,7 +16,7 @@ function getEnv(base) {
     }
     return ret;
 }
-async function exec(cmd, args, opts) {
+export async function exec(cmd, args, opts) {
     const res = {
         stdout: '',
         stderr: '',
@@ -35,7 +34,7 @@ async function exec(cmd, args, opts) {
         },
         ignoreReturnCode: true, // Check exit status by myself for better error message
     };
-    const code = await (0, exec_1.exec)(cmd, args, execOpts);
+    const code = await origExec(cmd, args, execOpts);
     if (code === 0) {
         return res.stdout;
     }
@@ -45,9 +44,23 @@ async function exec(cmd, args, opts) {
     }
 }
 const IS_DEBUG = !!process.env['RUNNER_DEBUG'];
-async function unzip(file, cwd) {
+export async function unzip(file, cwd) {
     // Suppress large output on unarchiving assets when RUNNER_DEBUG is not set (#25)
     const args = IS_DEBUG ? [file] : ['-q', file];
     await exec('unzip', args, { cwd });
+}
+export function getProxyAgent() {
+    const proxy = process.env['HTTPS_PROXY'] ?? process.env['https_proxy'];
+    if (!proxy) {
+        return undefined;
+    }
+    try {
+        return new HttpsProxyAgent(proxy);
+    }
+    catch (err) {
+        const msg = err.message;
+        core.warning(`Trying to use an invalid proxy url: ${proxy}, err: ${msg}`);
+        return undefined;
+    }
 }
 //# sourceMappingURL=shell.js.map
